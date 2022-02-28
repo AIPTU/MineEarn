@@ -1,0 +1,36 @@
+---
+# Do not change this (Only for internal use)!
+config-version: 1.0
+
+# Messages settings.
+# Use "&" as formatting codes.
+messages:
+  generic-error: "&cAn unexpected error has occurred."
+  received: "&eYou have received &6{MONETARY_UNIT}{MONEY}"
+
+# Economy settings.
+# Possible providers: economyapi, bedrockeconomy, xp
+economy:
+  provider: BedrockEconomy
+
+# Earnings settings.
+# If you are using xp provider, 1 = 1 level of experience.
+earnings:
+  # Global earnings.
+  global:
+    "coal_ore": 80
+    "gold_ore": 150
+    "iron_ore": 100
+    # Oak log.
+    "log": 50
+    # Spruce log.
+    "log:1": 60
+ # Per-world earnings.
+  worlds:
+    world: # World folder name
+      "diamond_ore": 350
+      "emerald_ore": 300
+      "lapis_lazuli": 280
+      "quartz_ore": 200
+      "redstone_ore": 250
+...
