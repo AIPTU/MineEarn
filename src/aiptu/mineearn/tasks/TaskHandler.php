@@ -62,8 +62,8 @@ final class TaskHandler extends Task
 					}
 
 					$player->sendPopup(TextFormat::colorize($this->getPlugin()->replaceVars($typedConfig->getString('messages.received', '&eYou have received &6{MONETARY_UNIT}{MONEY}'), [
-						'{MONEY}' => number_format($money),
-						'{MONETARY_UNIT}' => $economyProvider->getMonetaryUnit(),
+						'MONEY' => number_format($money),
+						'MONETARY_UNIT' => $economyProvider->getMonetaryUnit(),
 					])));
 				});
 				$this->getPlugin()->setMoneyEarnt($player, 0);
