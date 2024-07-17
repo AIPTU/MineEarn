@@ -31,19 +31,14 @@ namespace aiptu\mineearn;
 use pocketmine\event\block\BlockBreakEvent;
 use pocketmine\event\Listener;
 
-final class EventHandler implements Listener
-{
-	public function __construct(private MineEarn $plugin)
-	{
-	}
+final class EventHandler implements Listener {
+	public function __construct(private MineEarn $plugin) {}
 
-	public function getPlugin(): MineEarn
-	{
+	public function getPlugin() : MineEarn {
 		return $this->plugin;
 	}
 
-	public function onBlockBreak(BlockBreakEvent $event): void
-	{
+	public function onBlockBreak(BlockBreakEvent $event) : void {
 		$block = $event->getBlock();
 		$player = $event->getPlayer();
 

@@ -34,37 +34,33 @@ use function is_array;
 use function is_string;
 use function var_export;
 
-final class TypedConfig
-{
-	public function __construct(private Config $config)
-	{
-	}
+final class TypedConfig {
+	public function __construct(private Config $config) {}
 
-	public function getString(string $key, string $default = ''): string
-	{
+	public function getString(string $key, string $default = '') : string {
 		$value = $this->config->getNested($key, $default);
 		if (!is_string($value)) {
 			throw new InvalidArgumentException("Invalid value for {$key}: " . self::printValue($value));
 		}
+
 		return $value;
 	}
 
 	/**
-	 * @param string[] $default
+	 * @param array<string> $default
 	 *
-	 * @return string[]
+	 * @return array<string>
 	 */
-	public function getStringList(string $key, array $default = []): array
-	{
+	public function getStringList(string $key, array $default = []) : array {
 		$value = $this->config->getNested($key, $default);
 		if (!is_array($value)) {
 			throw new InvalidArgumentException("Invalid value for {$key}: " . self::printValue($value));
 		}
+
 		return $value;
 	}
 
-	private static function printValue(mixed $value): string
-	{
+	private static function printValue(mixed $value) : string {
 		return var_export($value, true);
 	}
 }

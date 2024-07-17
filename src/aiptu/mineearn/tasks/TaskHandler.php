@@ -33,19 +33,14 @@ use pocketmine\scheduler\Task;
 use pocketmine\utils\TextFormat;
 use function number_format;
 
-final class TaskHandler extends Task
-{
-	public function __construct(private MineEarn $plugin)
-	{
-	}
+final class TaskHandler extends Task {
+	public function __construct(private MineEarn $plugin) {}
 
-	public function getPlugin(): MineEarn
-	{
+	public function getPlugin() : MineEarn {
 		return $this->plugin;
 	}
 
-	public function onRun(): void
-	{
+	public function onRun() : void {
 		foreach ($this->getPlugin()->getMoneyEarnt() as $player => $money) {
 			$player = $this->getPlugin()->getServer()->getPlayerExact($player);
 			if ($player === null) {
@@ -55,7 +50,7 @@ final class TaskHandler extends Task
 			$typedConfig = $this->getPlugin()->getTypedConfig();
 			$economyProvider = $this->getPlugin()->getEconomyProvider();
 			if ($money > 0) {
-				$economyProvider->giveMoney($player, $money, function (bool $success) use ($economyProvider, $money, $player, $typedConfig): void {
+				$economyProvider->giveMoney($player, $money, function (bool $success) use ($economyProvider, $money, $player, $typedConfig) : void {
 					if (!$success) {
 						$player->sendMessage(TextFormat::colorize($typedConfig->getString('messages.generic-error', '&cAn unexpected error has occurred.')));
 						return;

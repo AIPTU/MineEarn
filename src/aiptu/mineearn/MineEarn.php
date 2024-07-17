@@ -49,8 +49,7 @@ use function rename;
 use function str_replace;
 use function trim;
 
-final class MineEarn extends PluginBase
-{
+final class MineEarn extends PluginBase {
 	private const CONFIG_VERSION = 1.0;
 
 	private array $moneyEarnt = [];
@@ -63,8 +62,7 @@ final class MineEarn extends PluginBase
 
 	private TypedConfig $typedConfig;
 
-	public function onEnable(): void
-	{
+	public function onEnable() : void {
 		if (!class_exists(libPiggyEconomy::class)) {
 			$this->getLogger()->error('libPiggyEconomy virion not found. Please download MineEarn from Poggit-CI or use DEVirion (not recommended).');
 			$this->getServer()->getPluginManager()->disablePlugin($this);
@@ -84,38 +82,31 @@ final class MineEarn extends PluginBase
 		$this->getScheduler()->scheduleRepeatingTask(new TaskHandler($this), 20);
 	}
 
-	public function getMoneyEarnt(): array
-	{
+	public function getMoneyEarnt() : array {
 		return $this->moneyEarnt;
 	}
 
-	public function setMoneyEarnt(Player $player, float|int $value): void
-	{
+	public function setMoneyEarnt(Player $player, float|int $value) : void {
 		$this->moneyEarnt[$player->getName()] = $value;
 	}
 
-	public function getGlobalEarnings(): array
-	{
+	public function getGlobalEarnings() : array {
 		return $this->globalEarnings;
 	}
 
-	public function getWorldEarnings(): array
-	{
+	public function getWorldEarnings() : array {
 		return $this->worldEarnings;
 	}
 
-	public function getEconomyProvider(): EconomyProvider
-	{
+	public function getEconomyProvider() : EconomyProvider {
 		return $this->economyProvider;
 	}
 
-	public function getTypedConfig(): TypedConfig
-	{
+	public function getTypedConfig() : TypedConfig {
 		return $this->typedConfig;
 	}
 
-	public function checkItem(string $string): Item
-	{
+	public function checkItem(string $string) : Item {
 		try {
 			$item = LegacyStringToItemParser::getInstance()->parse($string);
 		} catch (LegacyStringToItemParserException $e) {
@@ -127,16 +118,15 @@ final class MineEarn extends PluginBase
 		return $item;
 	}
 
-	public function replaceVars(string $str, array $vars): string
-	{
+	public function replaceVars(string $str, array $vars) : string {
 		foreach ($vars as $key => $value) {
 			$str = str_replace('{' . $key . '}', (string) $value, $str);
 		}
+
 		return $str;
 	}
 
-	private function loadConfig(): bool
-	{
+	private function loadConfig() : bool {
 		$this->saveDefaultConfig();
 
 		if (!$this->getConfig()->exists('config-version') || ($this->getConfig()->get('config-version', self::CONFIG_VERSION) !== self::CONFIG_VERSION)) {
@@ -145,6 +135,7 @@ final class MineEarn extends PluginBase
 				$this->getLogger()->critical('An unknown error occurred while attempting to generate the new config');
 				$this->getServer()->getPluginManager()->disablePlugin($this);
 			}
+
 			$this->reloadConfig();
 		}
 
@@ -159,6 +150,7 @@ final class MineEarn extends PluginBase
 				$this->getLogger()->error($e->getMessage());
 				return false;
 			}
+
 			if (!is_numeric($earning)) {
 				return false;
 			}
@@ -181,6 +173,7 @@ final class MineEarn extends PluginBase
 					$this->getLogger()->error($e->getMessage());
 					return false;
 				}
+
 				if (!is_numeric($earning)) {
 					return false;
 				}
@@ -194,6 +187,7 @@ final class MineEarn extends PluginBase
 			} catch (WorldException $e) {
 				$this->getLogger()->error($e->getMessage());
 			}
+
 			if (!$valid) {
 				$this->getLogger()->error('World ' . $world . ' not found');
 				return false;
