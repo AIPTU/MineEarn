@@ -1,4 +1,5 @@
----
+# MineEarn Configuration
+
 # Do not change this (Only for internal use)!
 config-version: 1.0
 
@@ -6,31 +7,41 @@ config-version: 1.0
 # Use "&" as formatting codes.
 messages:
   generic-error: "&cAn unexpected error has occurred."
-  received: "&eYou have received &6{MONETARY_UNIT}{MONEY}"
+  received: "&eYou have received &6{MONETARY_UNIT}{MONEY} &efor &6{BLOCK}"
 
 # Economy settings.
-# Possible providers: economyapi, bedrockeconomy, xp
+# Possible providers: bedrockeconomy, xp
 economy:
   provider: BedrockEconomy
 
 # Earnings settings.
-# If you are using xp provider, 1 = 1 level of experience.
+# If you are using the "xp" provider, 1 unit = 1 level of experience.
 earnings:
+  settings:
+    enable_fortune_bonus: true  # Enable or disable bonus for Fortune enchantment
+    fortune_bonus_percentage: 10  # The percentage bonus per Fortune level
+    fortune_bonus_chance: 0.5  # Chance (0.0 to 1.0) of applying the Fortune bonus
+    enable_silk_touch_check: true  # Enable or disable check for Silk Touch enchantment
+    ignored_worlds: []  # List of worlds to ignore for earnings
+    
   # Global earnings.
+  # These apply to all worlds unless overridden by per-world earnings.
   global:
     "coal_ore": 80
     "gold_ore": 150
     "iron_ore": 100
-    # Oak log.
-    "log": 50
-    # Spruce log.
-    "log:1": 60
- # Per-world earnings.
+    "diamond_ore": 300
+    "emerald_ore": 350
+    "lapis_ore": 200
+    "redstone_ore": 250
+    "quartz_ore": 180
+
+  # Per-world earnings.
+  # These override global earnings for specific worlds.
   worlds:
     world: # World folder name
       "diamond_ore": 350
       "emerald_ore": 300
-      "lapis_lazuli": 280
+      "lapis_ore": 280
       "quartz_ore": 200
       "redstone_ore": 250
-...

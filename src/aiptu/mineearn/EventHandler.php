@@ -1,72 +1,120 @@
 <?php
 
 /*
+ * Copyright (c) 2021-2024 AIPTU
  *
- * Copyright (c) 2021 AIPTU
+ * For the full copyright and license information, please view
+ * the LICENSE.md file that was distributed with this source code.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
+ * @see https://github.com/AIPTU/MineEarn
  */
 
 declare(strict_types=1);
 
 namespace aiptu\mineearn;
 
+use pocketmine\block\Block;
 use pocketmine\event\block\BlockBreakEvent;
 use pocketmine\event\Listener;
+use pocketmine\item\enchantment\VanillaEnchantments;
+use pocketmine\item\Item;
+use pocketmine\player\Player;
+use pocketmine\utils\TextFormat;
+use function in_array;
+use function mt_getrandmax;
+use function mt_rand;
+use function number_format;
 
 final class EventHandler implements Listener {
 	public function __construct(private MineEarn $plugin) {}
 
-	public function getPlugin() : MineEarn {
-		return $this->plugin;
-	}
-
 	public function onBlockBreak(BlockBreakEvent $event) : void {
 		$block = $event->getBlock();
 		$player = $event->getPlayer();
+		$world = $player->getWorld()->getFolderName();
 
-		$money = 0;
-
-		$global = $this->getPlugin()->getGlobalEarnings();
-		foreach ($global as $data) {
-			[$earnBlock, $earning] = $data;
-			if ($block->asItem()->equals($earnBlock, true, false)) {
-				$money += $earning;
-			}
+		if (in_array($world, $this->plugin->getIgnoredWorlds(), true)) {
+			return;
 		}
 
+		if (!$player->hasFiniteResources()) {
+			return;
+		}
+
+		$item = $event->getItem();
+		if ($this->plugin->isSilkTouchCheckEnabled() && $item->hasEnchantment(VanillaEnchantments::SILK_TOUCH())) {
+			return;
+		}
+
+		$money = $this->calculateEarnings($block, $player, $item);
+
+		if ($money > 0) {
+			$messages = $this->plugin->getMessages();
+			$economyProvider = $this->plugin->getEconomyProvider();
+
+			$economyProvider->giveMoney($player, $money, function (bool $success) use ($block, $economyProvider, $money, $player, $messages) : void {
+				if (!$success) {
+					$player->sendMessage(TextFormat::colorize($messages['generic-error']));
+					return;
+				}
+
+				$player->sendPopup(TextFormat::colorize($this->plugin->replaceVars($messages['received'], [
+					'BLOCK' => $block->getName(),
+					'MONEY' => number_format($money),
+					'MONETARY_UNIT' => $economyProvider->getMonetaryUnit(),
+				])));
+			});
+		}
+	}
+
+	private function calculateEarnings(Block $block, Player $player, Item $item) : float {
+		$blockItem = $block->asItem();
+
+		$worldEarnings = $this->getWorldEarnings($blockItem, $player);
+		$earnings = $worldEarnings ?? $this->calculateGlobalEarnings($blockItem);
+
+		if ($this->plugin->isFortuneBonusEnabled() && $item->hasEnchantment(VanillaEnchantments::FORTUNE())) {
+			$fortuneLevel = $item->getEnchantmentLevel(VanillaEnchantments::FORTUNE());
+			$earnings = $this->applyFortuneModifier($earnings, $fortuneLevel);
+		}
+
+		return $earnings;
+	}
+
+	private function applyFortuneModifier(float $earnings, int $fortuneLevel) : float {
+		// Apply bonus based on Fortune level with a chance
+		if (mt_rand() / mt_getrandmax() <= $this->plugin->getFortuneBonusPercentage()) {
+			return $earnings * (1 + $this->plugin->getFortuneBonusChance() / 100 * $fortuneLevel);
+		}
+
+		return $earnings;
+	}
+
+	private function getWorldEarnings(Item $blockItem, Player $player) : ?float {
 		$world = $player->getWorld()->getFolderName();
-		$worlds = $this->getPlugin()->getWorldEarnings();
-		if (isset($worlds[$world])) {
-			foreach ($worlds[$world] as $data) {
-				[$earnBlock, $earning] = $data;
-				if ($block->asItem()->equals($earnBlock, true, false)) {
-					if ($player->hasPermission('minesell.world.' . $world)) {
-						$money += $earning;
-					}
+		$worldEarnings = $this->plugin->getWorldEarnings();
+
+		if (isset($worldEarnings[$world]) && $player->hasPermission('mineearn.world.' . $world)) {
+			foreach ($worldEarnings[$world] as [$earnBlock, $earning]) {
+				if ($blockItem->equals($earnBlock, true, false)) {
+					return (float) $earning;
 				}
 			}
 		}
 
-		if ($money > 0) {
-			$this->getPlugin()->setMoneyEarnt($player, $money);
+		return null;
+	}
+
+	private function calculateGlobalEarnings(Item $blockItem) : float {
+		$money = 0.0;
+		$globalEarnings = $this->plugin->getGlobalEarnings();
+
+		foreach ($globalEarnings as [$earnBlock, $earning]) {
+			if ($blockItem->equals($earnBlock, true, false)) {
+				$money += $earning;
+			}
 		}
+
+		return $money;
 	}
 }

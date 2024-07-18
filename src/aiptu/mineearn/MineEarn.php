@@ -1,93 +1,86 @@
 <?php
 
 /*
+ * Copyright (c) 2021-2024 AIPTU
  *
- * Copyright (c) 2021 AIPTU
+ * For the full copyright and license information, please view
+ * the LICENSE.md file that was distributed with this source code.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
+ * @see https://github.com/AIPTU/MineEarn
  */
 
 declare(strict_types=1);
 
 namespace aiptu\mineearn;
 
-use aiptu\mineearn\tasks\TaskHandler;
-use aiptu\mineearn\utils\TypedConfig;
 use DaPigGuy\libPiggyEconomy\libPiggyEconomy;
 use DaPigGuy\libPiggyEconomy\providers\EconomyProvider;
 use pocketmine\item\Item;
-use pocketmine\item\LegacyStringToItemParser;
-use pocketmine\item\LegacyStringToItemParserException;
 use pocketmine\item\StringToItemParser;
 use pocketmine\permission\DefaultPermissions;
 use pocketmine\permission\Permission;
 use pocketmine\permission\PermissionManager;
-use pocketmine\player\Player;
+use pocketmine\plugin\DisablePluginException;
 use pocketmine\plugin\PluginBase;
-use pocketmine\world\WorldException;
+use Symfony\Component\Filesystem\Exception\IOException;
+use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Filesystem\Path;
+use function array_map;
+use function array_merge;
 use function class_exists;
-use function explode;
+use function is_array;
+use function is_bool;
+use function is_float;
+use function is_int;
 use function is_numeric;
-use function rename;
 use function str_replace;
-use function trim;
 
 final class MineEarn extends PluginBase {
 	private const CONFIG_VERSION = 1.0;
 
-	private array $moneyEarnt = [];
-
 	private array $globalEarnings = [];
-
 	private array $worldEarnings = [];
-
+	private array $messages = [];
+	private bool $enableFortuneBonus;
+	private int $fortuneBonusPercentage;
+	private float $fortuneBonusChance;
+	private bool $enableSilkTouchCheck;
+	private array $ignoredWorlds;
 	private EconomyProvider $economyProvider;
-
-	private TypedConfig $typedConfig;
 
 	public function onEnable() : void {
 		if (!class_exists(libPiggyEconomy::class)) {
 			$this->getLogger()->error('libPiggyEconomy virion not found. Please download MineEarn from Poggit-CI or use DEVirion (not recommended).');
-			$this->getServer()->getPluginManager()->disablePlugin($this);
-			return;
+			throw new DisablePluginException();
 		}
 
-		if (!$this->loadConfig()) {
-			$this->getLogger()->critical('An error occurred while attempting to load the config');
-			$this->getServer()->getPluginManager()->disablePlugin($this);
-			return;
+		try {
+			$this->loadConfig();
+		} catch (\Throwable $e) {
+			$this->getLogger()->critical('An error occurred while attempting to load the config: ' . $e->getMessage());
+			throw new DisablePluginException();
 		}
 
 		libPiggyEconomy::init();
-		$this->economyProvider = libPiggyEconomy::getProvider($this->typedConfig->getStringList('economy'));
+
+		$economyConfig = $this->getConfig()->get('economy');
+		if (!is_array($economyConfig) || !isset($economyConfig['provider'])) {
+			$this->getLogger()->critical('Invalid or missing "economy" configuration. Please provide an array with the key "provider".');
+			throw new DisablePluginException();
+		}
+
+		try {
+			$this->economyProvider = libPiggyEconomy::getProvider($economyConfig);
+		} catch (\Throwable $e) {
+			$this->getLogger()->critical('Failed to get economy provider: ' . $e->getMessage());
+			throw new DisablePluginException();
+		}
 
 		$this->getServer()->getPluginManager()->registerEvents(new EventHandler($this), $this);
-		$this->getScheduler()->scheduleRepeatingTask(new TaskHandler($this), 20);
 	}
 
-	public function getMoneyEarnt() : array {
-		return $this->moneyEarnt;
-	}
-
-	public function setMoneyEarnt(Player $player, float|int $value) : void {
-		$this->moneyEarnt[$player->getName()] = $value;
+	public function getEconomyProvider() : EconomyProvider {
+		return $this->economyProvider;
 	}
 
 	public function getGlobalEarnings() : array {
@@ -98,24 +91,28 @@ final class MineEarn extends PluginBase {
 		return $this->worldEarnings;
 	}
 
-	public function getEconomyProvider() : EconomyProvider {
-		return $this->economyProvider;
+	public function getMessages() : array {
+		return $this->messages;
 	}
 
-	public function getTypedConfig() : TypedConfig {
-		return $this->typedConfig;
+	public function isFortuneBonusEnabled() : bool {
+		return $this->enableFortuneBonus;
 	}
 
-	public function checkItem(string $string) : Item {
-		try {
-			$item = LegacyStringToItemParser::getInstance()->parse($string);
-		} catch (LegacyStringToItemParserException $e) {
-			if (($item = StringToItemParser::getInstance()->parse(explode(':', str_replace([' ', 'minecraft:'], ['_', ''], trim($string)))[0])) === null) {
-				throw $e;
-			}
-		}
+	public function getFortuneBonusPercentage() : int {
+		return $this->fortuneBonusPercentage;
+	}
 
-		return $item;
+	public function getFortuneBonusChance() : float {
+		return $this->fortuneBonusChance;
+	}
+
+	public function isSilkTouchCheckEnabled() : bool {
+		return $this->enableSilkTouchCheck;
+	}
+
+	public function getIgnoredWorlds() : array {
+		return $this->ignoredWorlds;
 	}
 
 	public function replaceVars(string $str, array $vars) : string {
@@ -126,74 +123,129 @@ final class MineEarn extends PluginBase {
 		return $str;
 	}
 
-	private function loadConfig() : bool {
-		$this->saveDefaultConfig();
+	private function loadConfig() : void {
+		$this->checkConfig();
 
-		if (!$this->getConfig()->exists('config-version') || ($this->getConfig()->get('config-version', self::CONFIG_VERSION) !== self::CONFIG_VERSION)) {
-			$this->getLogger()->warning('An outdated config was provided attempting to generate a new one...');
-			if (!rename($this->getDataFolder() . 'config.yml', $this->getDataFolder() . 'config.old.yml')) {
-				$this->getLogger()->critical('An unknown error occurred while attempting to generate the new config');
-				$this->getServer()->getPluginManager()->disablePlugin($this);
-			}
+		$config = $this->getConfig();
 
-			$this->reloadConfig();
+		$globalEarnings = $config->getNested('earnings.global');
+		if (!is_array($globalEarnings)) {
+			throw new \InvalidArgumentException('Invalid or missing "earnings.global" value in the configuration. Please provide an array.');
 		}
 
-		$this->typedConfig = new TypedConfig($this->getConfig());
+		$this->globalEarnings = $this->parseEarnings($globalEarnings);
 
-		$globalEarnings = $this->typedConfig->getStringList('earnings.global');
-		$this->globalEarnings = [];
-		foreach ($globalEarnings as $block => $earning) {
+		$worldEarnings = $config->getNested('earnings.worlds', []);
+		if (!is_array($worldEarnings)) {
+			throw new \InvalidArgumentException('Invalid or missing "earnings.worlds" value in the configuration. Please provide an array.');
+		}
+
+		$this->worldEarnings = [];
+		foreach ($worldEarnings as $world => $earnings) {
+			if (!is_array($earnings)) {
+				throw new \InvalidArgumentException("Earnings for world '{$world}' is not an array.");
+			}
+
+			$permissionManager = PermissionManager::getInstance();
+			$permission = new Permission('mineearn.world.' . $world, 'Allow users to earn in the world ' . $world);
+			$permissionManager->addPermission($permission);
+			$permissionManager->getPermission(DefaultPermissions::ROOT_OPERATOR)?->addChild($permission->getName(), true);
+
+			$parsedEarnings = $this->parseEarnings($earnings);
+			$this->worldEarnings[$world] = $parsedEarnings;
+
+			if (!$this->getServer()->getWorldManager()->isWorldGenerated($world)) {
+				throw new \InvalidArgumentException("Invalid world name '{$world}' in 'earnings.worlds'. This world does not exist on the server.");
+			}
+		}
+
+		$messages = $config->get('messages', []);
+		if (!is_array($messages)) {
+			throw new \InvalidArgumentException('Invalid or missing "messages" value in the configuration. Please provide an array.');
+		}
+
+		$defaultMessages = [
+			'generic-error' => '&cAn unexpected error has occurred.',
+			'received' => '&eYou have received &6{MONETARY_UNIT}{MONEY} for {BLOCK}',
+		];
+		$messages = array_merge($defaultMessages, $messages);
+
+		$this->messages = array_map('strval', $messages);
+
+		$enableFortuneBonus = $config->getNested('earnings.settings.enable_fortune_bonus');
+		if (!is_bool($enableFortuneBonus)) {
+			throw new \InvalidArgumentException('Invalid or missing "enable_fortune_bonus" value in the configuration. Please provide a boolean (true/false) value.');
+		}
+
+		$this->enableFortuneBonus = $enableFortuneBonus;
+
+		$fortuneBonusPercentage = $config->getNested('earnings.settings.fortune_bonus_percentage');
+		if (!is_int($fortuneBonusPercentage) || $fortuneBonusPercentage < 0 || $fortuneBonusPercentage > 100) {
+			throw new \InvalidArgumentException('Invalid or missing "fortune_bonus_percentage" value in the configuration. Please provide an integer between 0 and 100.');
+		}
+
+		$this->fortuneBonusPercentage = $fortuneBonusPercentage;
+
+		$fortuneBonusChance = $config->getNested('earnings.settings.fortune_bonus_chance');
+		if (!is_float($fortuneBonusChance) || $fortuneBonusChance < 0.0 || $fortuneBonusChance > 1.0) {
+			throw new \InvalidArgumentException('Invalid or missing "fortune_bonus_chance" value in the configuration. Please provide a float between 0.0 and 1.0.');
+		}
+
+		$this->fortuneBonusChance = $fortuneBonusChance;
+
+		$enableSilkTouchCheck = $config->getNested('earnings.settings.enable_silk_touch_check');
+		if (!is_bool($enableSilkTouchCheck)) {
+			throw new \InvalidArgumentException('Invalid or missing "enable_silk_touch_check" value in the configuration. Please provide a boolean (true/false) value.');
+		}
+
+		$this->enableSilkTouchCheck = $enableSilkTouchCheck;
+
+		$ignoredWorlds = $config->getNested('earnings.settings.ignored_worlds');
+		if (!is_array($ignoredWorlds)) {
+			throw new \InvalidArgumentException('Invalid or missing "ignored_worlds" value in the configuration. Please provide an array of world names.');
+		}
+
+		foreach ($ignoredWorlds as $worldName) {
+			if (!$this->getServer()->getWorldManager()->isWorldGenerated($worldName)) {
+				throw new \InvalidArgumentException("Invalid world name '{$worldName}' in 'ignored_worlds'. This world does not exist on the server.");
+			}
+		}
+
+		$this->ignoredWorlds = $ignoredWorlds;
+	}
+
+	private function checkConfig() : void {
+		$config = $this->getConfig();
+
+		if (!$config->exists('config-version') || $config->get('config-version') !== self::CONFIG_VERSION) {
+			$this->getLogger()->warning('An outdated config was provided. Attempting to generate a new one...');
+			$filesystem = new Filesystem();
+
 			try {
-				$block = $this->checkItem($block);
-			} catch (\InvalidArgumentException $e) {
-				$this->getLogger()->error($e->getMessage());
-				return false;
+				$filesystem->rename(Path::join($this->getDataFolder(), 'config.yml'), Path::join($this->getDataFolder(), 'config.old.yml'));
+				$this->reloadConfig();
+			} catch (IOException $e) {
+				$this->getLogger()->critical('Failed to rename old config file: ' . $e->getMessage());
+				throw new DisablePluginException();
+			}
+		}
+	}
+
+	private function parseEarnings(array $earnings) : array {
+		$parsedEarnings = [];
+		foreach ($earnings as $block => $earning) {
+			$blockItem = StringToItemParser::getInstance()->parse($block);
+			if (!$blockItem instanceof Item) {
+				throw new \InvalidArgumentException("Invalid item '{$block}'");
 			}
 
 			if (!is_numeric($earning)) {
-				return false;
+				throw new \InvalidArgumentException("Earning value for block '{$block}' is not numeric: '{$earning}'");
 			}
 
-			$this->globalEarnings[] = [$block, $earning];
+			$parsedEarnings[] = [$blockItem, (float) $earning];
 		}
 
-		$worldEarnings = $this->typedConfig->getStringList('earnings.worlds');
-		$this->worldEarnings = [];
-		foreach ($worldEarnings as $world => $earnings) {
-			$permission_manager = PermissionManager::getInstance();
-			$permission = new Permission('mineearn.world.' . $world, 'Allow users to earn in the world ' . $world);
-			$permission_manager->addPermission($permission);
-			$permission_manager->getPermission(DefaultPermissions::ROOT_OPERATOR)?->addChild($permission->getName(), true);
-
-			foreach ($earnings as $block => $earning) {
-				try {
-					$block = $this->checkItem($block);
-				} catch (\InvalidArgumentException $e) {
-					$this->getLogger()->error($e->getMessage());
-					return false;
-				}
-
-				if (!is_numeric($earning)) {
-					return false;
-				}
-
-				$this->worldEarnings[$world][] = [$block, $earning];
-			}
-
-			$valid = false;
-			try {
-				$valid = $this->getServer()->getWorldManager()->loadWorld($world);
-			} catch (WorldException $e) {
-				$this->getLogger()->error($e->getMessage());
-			}
-
-			if (!$valid) {
-				$this->getLogger()->error('World ' . $world . ' not found');
-				return false;
-			}
-		}
-
-		return true;
+		return $parsedEarnings;
 	}
 }
